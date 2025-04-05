@@ -86,12 +86,31 @@ class MathProblem:
         self.selected = False
         self.correct_option_index = random.randint(0, 2)
         self.options = self.generate_options()
-        self.width = 150
-        self.height = 100
+        self.width = 80
+        self.height = 80
         self.option_rects = []
         self.update_option_rects()
         self.wrong_answer_clicked = False
         self.wrong_time = 0
+        
+        # Asteroid visual properties
+        self.radius = 40
+        self.rotation = random.uniform(0, 360)
+        self.rotation_speed = random.uniform(-0.05, 0.05)
+        self.points = []
+        # Generate irregular asteroid shape
+        for i in range(8):
+            angle = i * 45 + random.uniform(-10, 10)
+            distance = self.radius + random.uniform(-10, 10)
+            x_offset = math.cos(math.radians(angle)) * distance
+            y_offset = math.sin(math.radians(angle)) * distance
+            self.points.append((x_offset, y_offset))
+            
+        # Explosion animation
+        self.exploding = False
+        self.explosion_radius = 0
+        self.explosion_duration = 500  # in milliseconds
+        self.explosion_start_time = 0
         
     def generate_problem(self):
         if self.level == LEVEL_BASIC:
@@ -193,18 +212,43 @@ class MathProblem:
     def update(self, dt):
         self.y += self.speed * dt
         self.update_option_rects()
+        
+        # Rotate asteroid
+        self.rotation += self.rotation_speed * dt
+        
+        # Update explosion animation
+        if self.exploding:
+            current_time = pygame.time.get_ticks()
+            progress = (current_time - self.explosion_start_time) / self.explosion_duration
+            if progress >= 1:
+                self.selected = True  # Mark for removal
+            else:
+                self.explosion_radius = self.radius * progress * 2
     
     def draw(self, surface):
-        # Draw problem
-        problem_text = font_medium.render(self.problem, True, WHITE)
-        surface.blit(problem_text, (self.x - problem_text.get_width() // 2, self.y))
+        if self.exploding:
+            # Draw explosion
+            pygame.draw.circle(surface, ORANGE, (int(self.x), int(self.y)), int(self.explosion_radius))
+            pygame.draw.circle(surface, YELLOW, (int(self.x), int(self.y)), int(self.explosion_radius * 0.7))
+            return
         
-        # Draw options
+        # Draw asteroid
+        points = []
+        for x_offset, y_offset in self.points:
+            rotated_x = x_offset * math.cos(math.radians(self.rotation)) - y_offset * math.sin(math.radians(self.rotation))
+            rotated_y = x_offset * math.sin(math.radians(self.rotation)) + y_offset * math.cos(math.radians(self.rotation))
+            points.append((self.x + rotated_x, self.y + rotated_y))
+            
+        pygame.draw.polygon(surface, (150, 150, 150), points)
+        
+        # Draw problem text on asteroid
+        problem_text = font_small.render(self.problem, True, WHITE)
+        surface.blit(problem_text, (self.x - problem_text.get_width() // 2, self.y - problem_text.get_height() // 2))
+        
+        # Draw options below asteroid
         for i, option in enumerate(self.options):
             color = YELLOW
-            if self.selected:
-                color = GREEN if i == self.correct_option_index else RED
-            elif self.wrong_answer_clicked and i != self.correct_option_index:
+            if self.wrong_answer_clicked and i != self.correct_option_index:
                 color = RED
                 
             pygame.draw.rect(surface, color, self.option_rects[i], 0, 5)
@@ -217,6 +261,50 @@ class MathProblem:
         if self.wrong_answer_clicked:
             wrong_text = font_medium.render("Wrong!", True, RED)
             surface.blit(wrong_text, (self.x - wrong_text.get_width() // 2, self.y - 30))
+    
+    def start_explosion(self):
+        self.exploding = True
+        self.explosion_start_time = pygame.time.get_ticks()
+
+class Bullet:
+    def __init__(self, x, y, target_x, target_y, option_index):
+        self.x = x
+        self.y = y
+        self.width = 5
+        self.height = 15
+        self.speed = 0.5
+        self.option_index = option_index
+        
+        # Calculate direction vector
+        dx = target_x - x
+        dy = target_y - y
+        distance = math.sqrt(dx * dx + dy * dy)
+        self.direction_x = dx / distance if distance > 0 else 0
+        self.direction_y = dy / distance if distance > 0 else -1
+        
+        # Calculate angle for drawing
+        self.angle = math.degrees(math.atan2(-self.direction_y, self.direction_x)) - 90
+        
+    def update(self, dt):
+        self.x += self.direction_x * self.speed * dt
+        self.y += self.direction_y * self.speed * dt
+        
+    def draw(self, surface):
+        # Draw bullet as a small elongated rectangle
+        bullet_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        pygame.draw.rect(bullet_surface, CYAN, (0, 0, self.width, self.height))
+        
+        # Rotate bullet to face direction of travel
+        rotated_bullet = pygame.transform.rotate(bullet_surface, self.angle)
+        rect = rotated_bullet.get_rect(center=(self.x, self.y))
+        surface.blit(rotated_bullet, rect.topleft)
+        
+    def check_collision(self, problem):
+        # Simple circular collision detection with asteroid
+        dx = self.x - problem.x
+        dy = self.y - problem.y
+        distance = math.sqrt(dx * dx + dy * dy)
+        return distance < problem.radius
 
 class Player:
     def __init__(self):
@@ -235,6 +323,9 @@ class Player:
             (self.x, self.y + 5),
             (self.x + 20, self.y + 15)
         ])
+        
+    def move_to(self, x):
+        self.x = max(25, min(SCREEN_WIDTH - 25, x))
 
 class Menu:
     def __init__(self):
@@ -327,6 +418,7 @@ class Game:
     def reset_game(self):
         self.player = Player()
         self.math_problems = []
+        self.bullets = []
         self.spawn_timer = 0
         
         # Adjust spawn delay based on level
@@ -374,6 +466,10 @@ class Game:
         
         mouse_pos = pygame.mouse.get_pos()
         
+        # Move player with mouse in game state
+        if self.game_state == STATE_GAME and not self.game_over:
+            self.player.move_to(mouse_pos[0])
+        
         # Handle state-specific events
         if self.game_state == STATE_MENU:
             # Check if Start button was clicked
@@ -381,34 +477,21 @@ class Game:
                 self.start_game(self.menu.selected_level)
                 
         elif self.game_state == STATE_GAME and not self.game_over:
-            # Game state - handle clicking on math problems
+            # Game state - handle clicking on math problem options
             if mouse_click:
                 self.handle_game_click(mouse_pos)
     
     def handle_game_click(self, mouse_pos):
         # Check if player clicked on any option
         for problem in self.math_problems:
-            if problem.selected or problem.y > SCREEN_HEIGHT:
-                continue  # Skip already answered or off-screen problems
+            if problem.exploding or problem.selected or problem.y > SCREEN_HEIGHT:
+                continue  # Skip already answered, exploding, or off-screen problems
                 
             for i, rect in enumerate(problem.option_rects):
                 if rect.collidepoint(mouse_pos):
-                    if i == problem.correct_option_index:
-                        problem.selected = True
-                        
-                        # Award more points for harder levels
-                        if self.current_level == LEVEL_BASIC:
-                            self.player.score += 10
-                        elif self.current_level == LEVEL_INTERMEDIATE:
-                            self.player.score += 15
-                        else:  # LEVEL_ADVANCED
-                            self.player.score += 20
-                    else:
-                        problem.wrong_answer_clicked = True
-                        problem.wrong_time = pygame.time.get_ticks()
-                        self.player.lives -= 1
-                        if self.player.lives <= 0:
-                            self.game_over = True
+                    # Create a bullet
+                    self.bullets.append(Bullet(self.player.x, self.player.y - 25, problem.x, problem.y, i))
+                    break
     
     def update(self):
         if self.game_state != STATE_GAME or self.game_over:
@@ -438,6 +521,44 @@ class Game:
                     self.player.lives -= 1
                     if self.player.lives <= 0:
                         self.game_over = True
+        
+        # Update bullets
+        for bullet in list(self.bullets):
+            bullet.update(dt)
+            
+            # Check if bullet is off-screen
+            if bullet.y < 0 or bullet.y > SCREEN_HEIGHT or bullet.x < 0 or bullet.x > SCREEN_WIDTH:
+                self.bullets.remove(bullet)
+                continue
+                
+            # Check bullet collisions with problems
+            for problem in list(self.math_problems):
+                if problem.exploding or problem.selected:
+                    continue
+                    
+                if bullet.check_collision(problem):
+                    # Check if correct option
+                    if bullet.option_index == problem.correct_option_index:
+                        problem.start_explosion()
+                        
+                        # Award more points for harder levels
+                        if self.current_level == LEVEL_BASIC:
+                            self.player.score += 10
+                        elif self.current_level == LEVEL_INTERMEDIATE:
+                            self.player.score += 15
+                        else:  # LEVEL_ADVANCED
+                            self.player.score += 20
+                    else:
+                        problem.wrong_answer_clicked = True
+                        problem.wrong_time = pygame.time.get_ticks()
+                        self.player.lives -= 1
+                        if self.player.lives <= 0:
+                            self.game_over = True
+                    
+                    # Remove bullet
+                    if bullet in self.bullets:
+                        self.bullets.remove(bullet)
+                    break
                         
         # Check if game over, transition to appropriate state
         if self.game_over:
@@ -458,9 +579,13 @@ class Game:
             self.menu.draw(screen)
             
         elif self.game_state == STATE_GAME or self.game_state == STATE_GAME_OVER:
-            # Draw math problems
+            # Draw math problems (asteroids)
             for problem in self.math_problems:
                 problem.draw(screen)
+            
+            # Draw bullets
+            for bullet in self.bullets:
+                bullet.draw(screen)
             
             # Draw player
             self.player.draw(screen)
@@ -487,7 +612,7 @@ class Game:
             screen.blit(level_display, (SCREEN_WIDTH // 2 - level_display.get_width() // 2, 20))
             
             # Instructions
-            instructions = font_small.render("Click on the correct answer!", True, WHITE)
+            instructions = font_small.render("Click on an option to shoot the asteroid!", True, WHITE)
             screen.blit(instructions, (SCREEN_WIDTH // 2 - instructions.get_width() // 2, SCREEN_HEIGHT - 30))
             
             # Game over screen
