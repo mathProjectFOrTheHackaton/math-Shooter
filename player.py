@@ -9,7 +9,7 @@ class Player:
         self.height = 50
         self.score = 0
         self.point_counter = 0
-        #self.current_level = 1
+        self.level = 1  # Initialize player level to 1
         self.lives = 3
         
     def draw(self, surface):
@@ -21,10 +21,15 @@ class Player:
             (self.x + 20, self.y + 15)
         ])
 
-    def update_level(self, current_level):
-        self.current_level = self.score // 100
-        if self.score // 100 > self.current_level:
-            self.current_level +=1 
+    def update_level(self):
+        # Calculate level based on score (level increases every 100 points)
+        new_level = (self.score // 100) + 1
+        
+        # Only update if level has increased
+        if new_level > self.level:
+            self.level = new_level
+            return True  # Return True if level increased
+        return False  # Return False if level didn't change
         
     def move_to(self, x):
         self.x = max(25, min(SCREEN_WIDTH - 25, x)) 

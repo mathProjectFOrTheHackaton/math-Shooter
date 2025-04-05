@@ -20,16 +20,15 @@ class Game:
         self.math_problems = []
         self.bullets = []
         self.spawn_timer = 0
-        self.player_level = 1  # Player progression level (separate from difficulty)
+        self.difficulty_level = LEVEL_BASIC  # Game difficulty level (separate from player level)
         
         # Adjust spawn delay based on level
-        self.current_level = LEVEL_BASIC  # Default, will be updated from menu
         self.last_time = pygame.time.get_ticks()
         self.game_over = False
         
     def start_game(self, level):
         self.reset_game()
-        self.current_level = level
+        self.difficulty_level = level
         
         # Set spawn delay based on level
         if level == LEVEL_BASIC:
@@ -103,15 +102,20 @@ class Game:
         self.last_time = current_time
         
         # Update player level based on score
-        if self.player.score // 100 > self.player_level:
-            self.current_level +=1 
+        level_increased = self.player.update_level()
+        
+        # If player level increased, we can add effects or adjust difficulty
+        if level_increased:
+            # Optional: Adjust difficulty as player progresses
+            # For example, reduce spawn time slightly with each level
+            self.spawn_delay = max(2000, self.spawn_delay - 300)
         
         # Spawn new math problems
         self.spawn_timer += dt
         if self.spawn_timer >= self.spawn_delay:
             self.spawn_timer = 0
             x = random.randint(100, SCREEN_WIDTH - 100)
-            self.math_problems.append(MathProblem(x, -50, self.current_level))
+            self.math_problems.append(MathProblem(x, -50, self.difficulty_level))
             
         # Update math problems
         for problem in list(self.math_problems):
@@ -147,10 +151,10 @@ class Game:
                         problem.start_explosion()
                         
                         # Award more points for harder levels
-                        if self.current_level == LEVEL_BASIC:
+                        if self.difficulty_level == LEVEL_BASIC:
                             self.player.score += 10 #counter to track score
                          
-                        elif self.current_level == LEVEL_INTERMEDIATE:
+                        elif self.difficulty_level == LEVEL_INTERMEDIATE:
                             self.player.score += 15
                          
                         else:  # LEVEL_ADVANCED
@@ -204,24 +208,24 @@ class Game:
             screen.blit(score_text, (20, 20))
 
             # Display player progression level
-            player_level_text = font_medium.render(f"Player Level: {self.player_level}", True, GREEN)
+            player_level_text = font_medium.render(f"Player Level: {self.player.level}", True, GREEN)
             screen.blit(player_level_text, (20, 50))
             
             lives_text = font_medium.render(f"Lives: {self.player.lives}", True, WHITE)
             screen.blit(lives_text, (SCREEN_WIDTH - lives_text.get_width() - 20, 20))
             
             # Draw level indicator
-            if self.current_level == LEVEL_BASIC:
+            if self.difficulty_level == LEVEL_BASIC:
                 level_text = "BASIC"
                 level_color = BLUE
-            elif self.current_level == LEVEL_INTERMEDIATE:
+            elif self.difficulty_level == LEVEL_INTERMEDIATE:
                 level_text = "INTERMEDIATE"
                 level_color = PURPLE
             else:  # LEVEL_ADVANCED
                 level_text = "ADVANCED"
                 level_color = RED
                 
-            level_display = font_small.render(f"Level: {level_text}", True, level_color)
+            level_display = font_small.render(f"Difficulty: {level_text}", True, level_color)
             screen.blit(level_display, (SCREEN_WIDTH // 2 - level_display.get_width() // 2, 20))
             
             # Instructions
