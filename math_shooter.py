@@ -335,8 +335,8 @@ class Game:
         self.game_over = False
         
     def start_game(self, level):
-        self.current_level = level
         self.reset_game()
+        self.current_level = level
         
         # Set spawn delay based on level
         if level == LEVEL_BASIC:
@@ -369,7 +369,7 @@ class Game:
                         pygame.quit()
                         sys.exit()
                 # Game over - press ENTER to go back to menu
-                if self.game_state == STATE_GAME and self.game_over and event.key == K_RETURN:
+                if (self.game_state == STATE_GAME_OVER or (self.game_state == STATE_GAME and self.game_over)) and event.key == K_RETURN:
                     self.game_state = STATE_MENU
         
         mouse_pos = pygame.mouse.get_pos()
@@ -377,7 +377,7 @@ class Game:
         # Handle state-specific events
         if self.game_state == STATE_MENU:
             # Check if Start button was clicked
-            if self.menu.handle_events(pygame.event.get(), mouse_pos, mouse_click):
+            if self.menu.handle_events([], mouse_pos, mouse_click):
                 self.start_game(self.menu.selected_level)
                 
         elif self.game_state == STATE_GAME and not self.game_over:
