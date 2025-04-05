@@ -24,7 +24,7 @@ pip install -r requirements.txt
 1. Run the game:
 
 ```
-python math_shooter.py
+python main.py
 ```
 
 2. Click on the correct answer for each math problem
