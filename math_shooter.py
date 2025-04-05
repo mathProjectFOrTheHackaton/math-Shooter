@@ -4,7 +4,7 @@ import random
 import math
 from pygame.locals import *
 
-# Initialize pygame
+# Initialize pygame blabla
 pygame.init()
 
 # Screen dimensions
